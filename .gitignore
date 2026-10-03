@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+.DS_Store
+*.png
+*.pdf
+*.zst
+*.zip
+*.csv
+
+# Archives
+*.zip
+
+# Documents
+*.pdf
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.webp
+*.svg
+*.ico

@@ -1,0 +1,16 @@
+name: wasp
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - joblib
+  - numpy
+  - scipy
+  - seaborn
+  - pandas
+  - tqdm
+  - matplotlib
+  - numba
+  - scikit-learn
+prefix: /Users/andrew/miniforge3/envs/wasp

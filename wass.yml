@@ -1,0 +1,21 @@
+name: wass
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - scipy
+  - python=3.11
+  - matplotlib
+  - numpy=1.23.5
+  - spyder
+  - pandas
+  - scikit-learn
+  - kmedoids
+  - jupyter
+  - seaborn
+  - tqdm
+  - zstandard
+  - line_profiler
+  - numba
+  - tk
+prefix: /Users/andrew/miniforge3/envs/wass
