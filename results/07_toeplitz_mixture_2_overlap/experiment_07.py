@@ -25,7 +25,7 @@ from src.utils.utils import _make_beta, _scale_beta, basic, block_corr, decoy, A
 
 n = 1000
 
-params = pd.read_csv("parameters_mixture_contam_3.csv")
+params = pd.read_csv("parameters_mixture_contam.csv")
 K = 5
 
 job_id = int(sys.argv[1])
