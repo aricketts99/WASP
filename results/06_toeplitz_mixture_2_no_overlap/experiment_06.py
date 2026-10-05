@@ -26,7 +26,7 @@ from src.utils.utils import _make_beta, _scale_beta, basic, block_corr, decoy, A
 n = 1000
 
 params = pd.read_csv("parameters_mixture_contam.csv")
-K = 2
+K = 3
 
 job_id = int(sys.argv[1])
 row = params.iloc[job_id - 1]
@@ -39,7 +39,7 @@ active_p = int(p*active)
 
 
 
-def experiment_7(n, p, active_p, overlap_frac, seed, n_test=1000):
+def experiment_6(n, p, active_p, seed, n_test=1000):
     '''
     Mixture with K = 2 and equal coefficients.
     overlap_frac controls the proportion of active variables
@@ -53,33 +53,15 @@ def experiment_7(n, p, active_p, overlap_frac, seed, n_test=1000):
     The test set is centred/scaled using TRAINING statistics only.
     '''
 
-    K = 2
+    K = 3
 
-    # ---------------------------------------------------------
-    # Overlap: convert the desired proportion to an integer count.
-    # For active_p = 1 the overlap is necessarily 0.
-    # ---------------------------------------------------------
-    if active_p <= 1:
-        overlap = 0
-    else:
-        overlap = int(round(overlap_frac * active_p))
-        overlap = min(overlap, active_p - 1)
-
-    # Check that the K submodels fit inside p
-    required_p = active_p + (K - 1) * (active_p - overlap)
-    if required_p > p:
-        raise ValueError(
-            f"Experiment infeasible: p={p}, active_p={active_p}, "
-            f"K={K}, overlap_frac={overlap_frac}, "
-            f"overlap={overlap}. Need p >= {required_p}."
-        )
 
     # ---------------------------------------------------------
     # True coefficients, shape (K, p).
     # Scaled using the TRAINING n so the SNR is defined once
     # and the same beta is used for train and test.
     # ---------------------------------------------------------
-    beta = _make_beta(p, active_p, K, overlap=overlap)
+    beta = _make_beta(p, active_p, K)
     beta = _scale_beta(beta, n, SNR=2.5 * np.ones(K))
 
     block_size = active_p * np.ones(K).astype(int)
@@ -126,7 +108,9 @@ def experiment_7(n, p, active_p, overlap_frac, seed, n_test=1000):
 
     return X, y, beta, partition, epsilon, X_test, y_test, partition_test, epsilon_test
 
-X,y,beta,partition,epsilon,X_test,y_test,partition_test, epsilon_test = experiment_5(n,p,active_p,0.5,seed)
+
+
+X,y,beta,partition,epsilon,X_test,y_test,partition_test, epsilon_test = experiment_6(n,p,active_p,seed)
 
 
 labels, counts = np.unique(partition, return_counts=True)
@@ -148,7 +132,7 @@ samples = samples[:, ::20, :].reshape(-1,p)
 
 import itertools
 Ls = [1,2,4,8,16,32]
-seeds = list(range(1,102))
+seeds = list(range(1,10))
 
 combined = list(itertools.product(Ls, seeds))
 from joblib import Parallel, delayed
@@ -246,9 +230,9 @@ for l in Ls:
     R2_test = 1-((y_test[:, None] - Y_hat_test) ** 2).sum(axis=0)/ ((y_test - y_train_mean) ** 2).sum()
     weighted_R2_test = (weights * R2_test).sum()
     
-    
-        
-    
+    print(
+        weighted_sum_over_K,weighted_sum_over_L,weighted_R2,weighted_R2_test,
+    )
 
     min_per_class[l] = min_per_class[l] + (
         weighted_sum_over_K,weighted_sum_over_L,weighted_R2,weighted_R2_test,
