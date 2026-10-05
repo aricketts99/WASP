@@ -28,7 +28,7 @@ n = 1000
 params = pd.read_csv("parameters_mixture_contam.csv")
 K = 2
 
-job_id = int(sys.argv[1])
+job_id = 500#int(sys.argv[1])
 row = params.iloc[job_id - 1]
 
 seed = int(row.seed)
@@ -37,80 +37,11 @@ active = float(row.active)/K
 
 active_p = int(p*active)
 
-# def experiment_5(n, p, active_p, overlap_frac, seed):
-#     '''
-#     Mixture with K = 5 and equal coefficients.
-#     overlap_frac controls the proportion of active variables
-#     shared between consecutive mixture components.
-#     Normal Errors.
-#     Block correlation in X.
-#     '''
-
-#     K = 5
-
-#     # Convert desired overlap proportion to an integer
-#     # overlap. For active_p = 1, overlap is necessarily 0.
-#     if active_p <= 1:
-#         overlap = 0
-#     else:
-#         overlap = int(round(overlap_frac * active_p))
-#         overlap = min(overlap, active_p - 1)
-
-#     # Check that the K submodels fit inside p
-#     required_p = active_p + (K - 1) * (active_p - overlap)
-
-#     if required_p > p:
-#         raise ValueError(
-#             f"Experiment infeasible: p={p}, active_p={active_p}, "
-#             f"K={K}, overlap_frac={overlap_frac}, "
-#             f"overlap={overlap}. Need p >= {required_p}."
-#         )
-
-#     beta = _make_beta(p, active_p, K, overlap=overlap)
-#     beta = _scale_beta(beta, n, SNR=2.5*np.ones(K))
-
-#     X = block_corr(
-#         n,
-#         p,
-#         block_size=active_p*np.ones(K).astype(int),
-#         rho=0.8,
-#         seed=seed
-#     )
-#     # Centre and scale X
-#     X = X - X.mean(axis=0)
-#     X_std = X.std(axis=0, ddof=1)
-#     X = X / X_std
-
-#     epsilon = basic_error(n, seed)
-
-#     y, partition = gen_Y(X, beta, epsilon,seed=seed)
-    
-#     y = y-y.mean(axis=0)
-    
-#     # ---------- NEW: test set from the same DGP ----------
-#     n_test = 100
-#     X_test = block_corr(
-#         n,
-#         p,
-#         block_size=active_p*np.ones(K).astype(int),
-#         rho=0.8,
-#         seed=seed+1
-#     )
-#     X_test = (X_test - X.mean(axis=0)) / X_std                # training mean/std, NOT test's own
-#     epsilon_test = basic_error(n_test, seed + 1) # different seed from training
-#     print("X_test:", X_test.shape)
-#     print("beta:", beta.shape)
-#     print("epsilon_test:", epsilon_test.shape)
-#     print("n_test:", n_test)
-#     y_test, partition_test = gen_Y(X_test, beta, epsilon_test,seed=seed+1)
-#     y_test = np.asarray(y_test).ravel() - y.mean(axis=0)      # training y-mean
-
-#     return X, y, beta, partition, epsilon, y_test, X_test
 
 
 def experiment_5(n, p, active_p, overlap_frac, seed, n_test=1000):
     '''
-    Mixture with K = 5 and equal coefficients.
+    Mixture with K = 2 and equal coefficients.
     overlap_frac controls the proportion of active variables
     shared between consecutive mixture components.
     Normal errors.
@@ -177,12 +108,12 @@ def experiment_5(n, p, active_p, overlap_frac, seed, n_test=1000):
     # all default to seed=123456 otherwise).
     # ---------------------------------------------------------
     X_test = block_corr(n_test, p, block_size=block_size, rho=0.8,
-                        seed=seed + 10_000)
+                        seed=seed + 10_00)
     X_test = (X_test - X_mean) / X_std          # training mean/std, not test's own
 
-    epsilon_test = basic_error(n_test, seed=seed + 20_000)
+    epsilon_test = basic_error(n_test, seed=seed + 20_00)
     y_test, partition_test = gen_Y(X_test, beta, epsilon_test,
-                                   seed=seed + 30_000)
+                                   seed=seed + 30_00)
     y_test = np.asarray(y_test).ravel() - y_mean  # training mean of y
 
     # ---------------------------------------------------------
@@ -196,6 +127,13 @@ def experiment_5(n, p, active_p, overlap_frac, seed, n_test=1000):
     return X, y, beta, partition, epsilon, X_test, y_test, partition_test, epsilon_test
 
 X,y,beta,partition,epsilon,X_test,y_test,partition_test, epsilon_test = experiment_5(n,p,active_p,0.5,seed)
+
+
+labels, counts = np.unique(partition, return_counts=True)
+pi = counts / len(partition)
+
+labels, counts = np.unique(partition_test, return_counts=True)
+pi_test = counts / len(partition_test)
 
 y  = y.reshape(-1,1)
 # Set up and run
@@ -271,254 +209,50 @@ for l in Ls:
         beta_full[active] = beta_hat.ravel()
 
         OLS_full[ell + 1] = beta_full
-
-    # ---------------------------------------------------------
-    # Posterior/shrunken estimates
-    # ---------------------------------------------------------
-
-    OLS_post = {
-        k: v * shrinkage
-        for k, v in OLS_full.items()
-    }
-
-    # ---------------------------------------------------------
-    # True component proportions and coefficients
-    # ---------------------------------------------------------
-
-    beta_trues = [
-        (np.mean(partition == k), beta[k])
-        for k in range(K)
-    ]
-
-    # Population/aggregate true coefficient
-    beta_true = np.sum(
-        [p_k * beta_k for p_k, beta_k in beta_trues],
-        axis=0
-    )
-
-    # ---------------------------------------------------------
-    # Aggregate OLS and posterior estimates
-    # ---------------------------------------------------------
-
-    OLS_agg = sum(
-        w * OLS_full[ell + 1]
-        for ell, w in enumerate(weights)
-    )
-
-    post_agg = sum(
-        w * OLS_post[ell + 1]
-        for ell, w in enumerate(weights)
-    )
-
-    # ---------------------------------------------------------
-    # OLS errors
-    # ---------------------------------------------------------
-
-    # Average component-wise error
-    error_OLS_error_comp = sum(
-        p_k * w * np.linalg.norm(OLS_full[ell + 1] - beta_k)
-        / np.linalg.norm(beta_k)
-        for p_k, beta_k in beta_trues
-        for ell, w in enumerate(weights)
-    )
-
-    # Error relative to population truth
-    error_OLS_error_pop = sum(
-        w * np.linalg.norm(OLS_full[ell + 1] - beta_true)
-        / np.linalg.norm(beta_true)
-        for ell, w in enumerate(weights)
-    )
-
-    # Aggregate estimate, error relative to components
-    error_OLS_agg_comp = sum(
-        p_k * np.linalg.norm(OLS_agg - beta_k)
-        / np.linalg.norm(beta_k)
-        for p_k, beta_k in beta_trues
-    )
-
-    # Aggregate estimate, error relative to population
-    error_OLS_agg_pop = (
-        np.linalg.norm(OLS_agg - beta_true)
-        / np.linalg.norm(beta_true)
-    )
-
-    # ---------------------------------------------------------
-    # Posterior/shrunken errors
-    # ---------------------------------------------------------
-
-    # Average component-wise error
-    error_post_error_comp = sum(
-        p_k * w * np.linalg.norm(OLS_post[ell + 1] - beta_k)
-        / np.linalg.norm(beta_k)
-        for p_k, beta_k in beta_trues
-        for ell, w in enumerate(weights)
-    )
-
-    # Error relative to population truth
-    error_post_error_pop = sum(
-        w * np.linalg.norm(OLS_post[ell + 1] - beta_true)
-        / np.linalg.norm(beta_true)
-        for ell, w in enumerate(weights)
-    )
-
-    # Aggregate estimate, error relative to components
-    error_post_agg_comp = sum(
-        p_k * np.linalg.norm(post_agg - beta_k)
-        / np.linalg.norm(beta_k)
-        for p_k, beta_k in beta_trues
-    )
-
-    # Aggregate estimate, error relative to population
-    error_post_agg_pop = (
-        np.linalg.norm(post_agg - beta_true)
-        / np.linalg.norm(beta_true)
-    )
-
-    # ---------------------------------------------------------
-    # R² calculations
-    # ---------------------------------------------------------
-
-    ss_tot = np.sum((y - np.mean(y)) ** 2)
-
-    # Individual-model R²s
-    r2_OLS = {}
-    r2_post = {}
-
-    for ell, (w, gamma) in enumerate(zip(weights, summaries)):
-
-        # This works for both ordinary and empty models.
-        # Empty model has OLS_full = zero vector, hence zero prediction.
-        pred_OLS = X @ OLS_full[ell + 1]
-        pred_post = shrinkage * pred_OLS
-
-        r2_OLS[ell + 1] = (
-            1 - np.sum((y - pred_OLS) ** 2) / ss_tot
-        )
-
-        r2_post[ell + 1] = (
-            1 - np.sum((y - pred_post) ** 2) / ss_tot
-        )
-
-    # ---------------------------------------------------------
-    # 1. OLS: calculate R² for each model, then average
-    # ---------------------------------------------------------
-
-    r2_OLS_error = sum(
-        w * r2_OLS[ell + 1]
-        for ell, w in enumerate(weights)
-    )
-
-    # ---------------------------------------------------------
-    # 2. OLS: aggregate predictions first, then calculate R²
-    # ---------------------------------------------------------
-
-    pred_OLS_agg = X @ OLS_agg
-
-    r2_OLS_agg = (
-        1 - np.sum((y - pred_OLS_agg) ** 2) / ss_tot
-    )
-
-    # ---------------------------------------------------------
-    # 3. Shrunk OLS: calculate R² for each model, then average
-    # ---------------------------------------------------------
-
-    r2_post_error = sum(
-        w * r2_post[ell + 1]
-        for ell, w in enumerate(weights)
-    )
-
-    # ---------------------------------------------------------
-    # 4. Shrunk OLS: aggregate predictions first, then calculate R²
-    # ---------------------------------------------------------
-
-    pred_post_agg = X @ post_agg
-
-    r2_post_agg = (
-        1 - np.sum((y - pred_post_agg) ** 2) / ss_tot
-    )
     
-    # ---------------------------------------------------------
-    # Out-of-sample R²
-    # ---------------------------------------------------------
-    # y_test is already centred by the TRAINING mean, so ss_tot_test is the
-    # error of the "predict the training mean" baseline. Can be negative.
-    ss_tot_test = np.sum(y_test ** 2)
-
-    r2_OLS_test = {}
-    r2_post_test = {}
-    for ell in range(len(weights)):
-        pred_OLS_t = X_test @ OLS_full[ell + 1]
-        pred_post_t = shrinkage * pred_OLS_t
-        r2_OLS_test[ell + 1] = 1 - np.sum((y_test - pred_OLS_t) ** 2) / ss_tot_test
-        r2_post_test[ell + 1] = 1 - np.sum((y_test - pred_post_t) ** 2) / ss_tot_test
-
-    # 1. OLS: R² per model, then average
-    r2_OLS_error_test = sum(w * r2_OLS_test[ell + 1] for ell, w in enumerate(weights))
-
-    # 2. OLS: aggregate coefficients/predictions first, then R²
-    r2_OLS_agg_test = 1 - np.sum((y_test - X_test @ OLS_agg) ** 2) / ss_tot_test
-
-    # 3. Shrunk OLS: R² per model, then average
-    r2_post_error_test = sum(w * r2_post_test[ell + 1] for ell, w in enumerate(weights))
-
-    # 4. Shrunk OLS: aggregate first, then R²
-    r2_post_agg_test = 1 - np.sum((y_test - X_test @ post_agg) ** 2) / ss_tot_test
-
-
-    # ---------------------------------------------------------
-    # Component-wise Hamming error
-    # ---------------------------------------------------------
+    OLS_array = np.array(list(OLS_full.values()))
+    beta_norms = np.linalg.norm(beta, axis=1)
+    distances = np.linalg.norm(OLS_array[:, None, :] - beta[None, :, :],axis=2,)
+    ### Beta metric 1, sum over mixture components and finding the closest OLS
+    ### vector that matches it.  Sum over K min over L.  Weighted by partition
+    ### weights.
+    distances_L = distances.min(axis=0)/beta_norms
+    weighted_sum_over_K = (pi*distances_L).sum()
     
-    # True binary vector for each component, recovered from beta
-    beta_trues = [
-        (np.mean(partition == k), (beta[k] != 0).astype(int))
-        for k in range(K)
-    ]
+    ### Beta metric 2, sum over centres and finding the closest OLS
+    ### vector that matches it.  Sum over L min over K.  Weighted by partition
+    ### weights.
+    closest_k = distances.argmin(axis=1)
+    closest_beta_norms = beta_norms[closest_k]
+    distances_K = distances.min(axis=1)/closest_beta_norms
     
-    # Weighted Hamming error:
-    # average over posterior centres and true components
-    weighted_error = sum(
-        w * p_k * np.sum(np.abs(summaries[ell] - truth_k)) / p
-        for ell, w in enumerate(weights)
-        for p_k, truth_k in beta_trues
-    )
+    weighted_sum_over_L = (weights*distances_K).sum()
+    
+    ### In sample R^2.
+    
+    Y_hat = X @ OLS_array.T
+    # R2 for each component
+    R2 = 1 - ((y[:, None] - Y_hat) ** 2).sum(axis=0) / ((y - y.mean()) ** 2).sum()
+    
+    # Weighted average component R2
+    weighted_R2 = (weights * R2).sum()
+    
+    
+    ### Out of sample R^2
+    
+    Y_hat_test = X_test @ OLS_array.T
+    y_train_mean = y.mean()
 
-    # ---------------------------------------------------------
-    # Store results
-    # ---------------------------------------------------------
+    R2_test = 1-((y_test[:, None] - Y_hat_test) ** 2).sum(axis=0)/ ((y_test - y_train_mean) ** 2).sum()
+    weighted_R2_test = (weights * R2_test).sum()
+    
+    
+        
+    
 
     min_per_class[l] = min_per_class[l] + (
-        r2_OLS_error,
-        r2_OLS_agg,
-        r2_post_error,
-        r2_post_agg,
-        weighted_error,
-        error_OLS_error_comp,
-        error_OLS_error_pop,
-        error_OLS_agg_comp,
-        error_OLS_agg_pop,
-        error_post_error_comp,
-        error_post_error_pop,
-        error_post_agg_comp,
-        error_post_agg_pop,
-        r2_OLS_error_test, r2_OLS_agg_test,
-        r2_post_error_test, r2_post_agg_test,
+        weighted_sum_over_K,weighted_sum_over_L,weighted_R2,weighted_R2_test,
     )
-
-    # ---------------------------------------------------------
-    # Print
-    # ---------------------------------------------------------
-
-    print(f"\nL = {l}")
-    print(f"  R² OLS:   error={r2_OLS_error:.4f}   aggregate={r2_OLS_agg:.4f}")
-    print(f"  R² Post:  error={r2_post_error:.4f}   aggregate={r2_post_agg:.4f}")
-    print(f"  OLS err:  component={error_OLS_error_comp:.4f}   population={error_OLS_error_pop:.4f}")
-    print(f"  OLS agg:  component={error_OLS_agg_comp:.4f}   population={error_OLS_agg_pop:.4f}")
-    print(f"  Post err: component={error_post_error_comp:.4f}   population={error_post_error_pop:.4f}")
-    print(f"  Post agg: component={error_post_agg_comp:.4f}   population={error_post_agg_pop:.4f}")
-    print(f"  Hamming:  {weighted_error:.4f}")
-    print(f"  R² OLS (test):   error={r2_OLS_error_test:.4f}   aggregate={r2_OLS_agg_test:.4f}")
-    print(f"  R² Post (test):  error={r2_post_error_test:.4f}   aggregate={r2_post_agg_test:.4f}")
 
 output = {
     "setup": {
