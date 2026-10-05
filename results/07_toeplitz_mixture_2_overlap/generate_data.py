@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import itertools
 
-ps = np.arange(100, 2050, 50)
-active = np.arange(0.1, 1.01, 0.04)
+ps = np.arange(50, 2050, 50)
+active = np.arange(0.04, 1.01, 0.04)
 seed = [
     660087059,
     307242793,

@@ -26,7 +26,7 @@ from src.utils.utils import _make_beta, _scale_beta, basic, block_corr, decoy, A
 n = 1000
 
 params = pd.read_csv("parameters_mixture_contam.csv")
-K = 5
+K = 2
 
 job_id = int(sys.argv[1])
 row = params.iloc[job_id - 1]
@@ -122,7 +122,7 @@ def experiment_5(n, p, active_p, overlap_frac, seed, n_test=1000):
     The test set is centred/scaled using TRAINING statistics only.
     '''
 
-    K = 5
+    K = 2
 
     # ---------------------------------------------------------
     # Overlap: convert the desired proportion to an integer count.
@@ -193,9 +193,9 @@ def experiment_5(n, p, active_p, overlap_frac, seed, n_test=1000):
     assert y_test.shape == (n_test,), y_test.shape
     assert not np.allclose(X_test[:5, :5], X[:5, :5]), "test X looks like a copy of train X"
 
-    return X, y, beta, partition, epsilon, X_test, y_test
+    return X, y, beta, partition, epsilon, X_test, y_test, partition_test, epsilon_test
 
-X,y,beta,partition,epsilon,X_test,y_test = experiment_5(n,p,active_p,0.5,seed)
+X,y,beta,partition,epsilon,X_test,y_test,partition_test, epsilon_test = experiment_5(n,p,active_p,0.5,seed)
 
 y  = y.reshape(-1,1)
 # Set up and run
