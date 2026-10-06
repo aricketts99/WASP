@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+Created on Tue Oct  6 10:24:30 2026
+
+@author: andrew
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
 Created on Wed Aug 26 15:41:32 2026
 
 @author: andrew
@@ -28,7 +36,7 @@ n = 1000
 params = pd.read_csv("parameters_mixture_contam.csv")
 K = 2
 
-job_id = int(sys.argv[1])
+job_id = 100#int(sys.argv[1])
 row = params.iloc[job_id - 1]
 
 seed = int(row.seed)
@@ -129,6 +137,11 @@ def experiment_7(n, p, active_p, overlap_frac, seed, n_test=1000):
 X,y,beta,partition,epsilon,X_test,y_test,partition_test, epsilon_test = experiment_7(n,p,active_p,0.5,seed)
 
 
+#### WE ARE GOING TO VARY ALPHA TO EXAMINE THE RELATIONSHIP BETWEEN IT AND BFDR/BFNR TRADEOFF OVER L
+
+
+
+
 labels, counts = np.unique(partition, return_counts=True)
 pi = counts / len(partition)
 
@@ -147,14 +160,15 @@ samples = fit.chains[:, 1001:, :]
 samples = samples[:, ::20, :].reshape(-1,p)
 
 import itertools
-Ls = [1,2,4,8,16,32]
-seeds = list(range(1,102))
+alphas = np.linspace(0.1, 1.9)
+Ls = [1,2,4,8,16,32,64]
+seeds = list(range(1,12))
 
-combined = list(itertools.product(Ls, seeds))
+combined = list(itertools.product(Ls, seeds,alphas))
 from joblib import Parallel, delayed
 
 results = Parallel(n_jobs=-1)(
-    delayed(wass_approx)(c[0],p,samples,1.0,c[1])
+    delayed(wass_approx)(c[0],p,samples,c[2],c[1])
     for c in combined
 )
 
@@ -165,127 +179,106 @@ results = Parallel(n_jobs=-1)(
 
 
 min_per_class = {}
-for key, group in itertools.groupby(results, key=lambda x: (x[-2])):
+for key, group in itertools.groupby(results, key=lambda x: (x[-2],x[-1])):
     min_per_class[key] = min(group, key=lambda x: x[0])
+    
 
+def compute_bfdr_bfnr(samples, weights, neighbourhoods, alpha):
+    """
+    Compute posterior BFDR and BFNR for a Wasserstein posterior approximation.
 
+    Parameters
+    ----------
+    samples : ndarray (n_samples, p)
+        Original posterior binary samples.
 
+    weights : ndarray (L,)
+        Wasserstein cluster weights.
 
-for l in Ls:
-    y = np.asarray(y).ravel()
-    weights = np.asarray(min_per_class[l][1], dtype=float)
-    summaries = np.asarray(min_per_class[l][2])
+    neighbourhoods : ndarray (n_samples,)
+        Cluster assignment for each posterior sample.
 
-    if summaries.shape[0] != len(weights):
-        summaries = summaries.T
+    alpha : float
+        Hamming loss parameter.
 
-    OLS_full = {}
+    Returns
+    -------
+    bfdr : float
+    bfnr : float
+    """
 
-    shrinkage = g_scale / (1.0 + g_scale)
+    fp = 0.0
+    tp = 0.0
+    fn = 0.0
 
-    # ---------------------------------------------------------
-    # Fit OLS for each model
-    # ---------------------------------------------------------
+    L = len(weights)
 
-    for ell, (w, gamma) in enumerate(zip(weights, summaries)):
+    for k in range(L):
 
-        active = gamma.astype(bool)
+        # samples assigned to cluster k
+        cluster = samples[neighbourhoods == k]
 
-        # Empty model: zero coefficient vector
-        if not active.any():
-            OLS_full[ell + 1] = np.zeros(p)
+        if cluster.shape[0] == 0:
             continue
 
-        Xa = X[:, active]
+        # cluster-specific posterior inclusion probabilities
+        pi_k = cluster.mean(axis=0)
 
-        beta_hat = np.linalg.lstsq(
-            Xa,
-            y,
-            rcond=None,
-        )[0]
+        # Bayes decision under weighted Hamming loss
+        selected = pi_k >= alpha / 2
 
-        # Embed coefficients into full p-dimensional space
-        beta_full = np.zeros(p)
-        beta_full[active] = beta_hat.ravel()
 
-        OLS_full[ell + 1] = beta_full
-    
-    OLS_array = np.array(list(OLS_full.values()))
-    beta_norms = np.linalg.norm(beta, axis=1)
-    distances = np.linalg.norm(OLS_array[:, None, :] - beta[None, :, :],axis=2,)
-    ### Beta metric 1, sum over mixture components and finding the closest OLS
-    ### vector that matches it.  Sum over K min over L.  Weighted by partition
-    ### weights.
-    distances_L = distances.min(axis=0)/beta_norms
-    weighted_sum_over_K = (pi*distances_L).sum()
-    
-    ### Beta metric 2, sum over centres and finding the closest OLS
-    ### vector that matches it.  Sum over L min over K.  Weighted by partition
-    ### weights.
-    closest_k = distances.argmin(axis=1)
-    closest_beta_norms = beta_norms[closest_k]
-    distances_K = distances.min(axis=1)/closest_beta_norms
-    
-    weighted_sum_over_L = (weights*distances_K).sum()
-    
-    ### In sample R^2.
-    
-    Y_hat = X @ OLS_array.T
-    # R2 for each component
-    R2 = 1 - ((y[:, None] - Y_hat) ** 2).sum(axis=0) / ((y - y.mean()) ** 2).sum()
-    
-    # Weighted average component R2
-    weighted_R2 = (weights * R2).sum()
-    
-    
-    ### Out of sample R^2
-    
-    Y_hat_test = X_test @ OLS_array.T
-    y_train_mean = y.mean()
+        # expected false discoveries
+        fp_k = np.sum(1 - pi_k[selected])
 
-    R2_test = 1-((y_test[:, None] - Y_hat_test) ** 2).sum(axis=0)/ ((y_test - y_train_mean) ** 2).sum()
-    weighted_R2_test = (weights * R2_test).sum()
-    
-    
-        
-    
+        # expected true discoveries
+        tp_k = np.sum(pi_k[selected])
 
-    min_per_class[l] = min_per_class[l] + (
-        weighted_sum_over_K,weighted_sum_over_L,weighted_R2,weighted_R2_test,
+        # expected false non-discoveries
+        fn_k = np.sum(pi_k[~selected])
+
+
+        # weight by Wasserstein posterior mass
+        fp += weights[k] * fp_k
+        tp += weights[k] * tp_k
+        fn += weights[k] * fn_k
+
+
+    bfdr = fp / max(fp + tp, 1e-12)
+
+    bfnr = fn / max(fn + tp, 1e-12)
+
+    return np.array([bfdr, bfnr])
+
+
+metrics = np.empty((len(Ls), len(alphas), 2))
+
+alpha_idx = {alpha: j for j, alpha in enumerate(alphas)}
+L_idx = {L: i for i, L in enumerate(Ls)}
+
+for (L, alpha), values in min_per_class.items():
+    i = L_idx[L]
+    j = alpha_idx[alpha]
+
+    loss, weights, centres, neighbourhoods, B, l, _ = values
+
+    metrics[i, j] = compute_bfdr_bfnr(
+        samples, weights, neighbourhoods, alpha
     )
 
-output = {
-    "setup": {
-        "job_id": job_id,
-        "seed": seed,
-        "p": p,
-        "n": n,
-        "active":float(row.active),
-        "active_p": active_p,
-        "K": K,
-        "sampler": "ADS",
-        "N_iter": 1000,
-        "N_burnin": 1000,
-        "n_chain": 100,
-        "n_temp": 3,
-        "g": g_scale,
-        'prior_type': 'g'
-    },
-    "samples": samples,
-    "results": min_per_class,
-}
-outfile = (
-    f"results_job{job_id:06d}"
-    f"_p{p}"
-    f"_a{active_p:.2f}"
-    f"_K{K}"
-    f"_seed{seed}.zst"
-)
-import pickle
-import zstandard as zstd
+import matplotlib.pyplot as plt
 
-cctx = zstd.ZstdCompressor(level=19)
+for i, L in enumerate(Ls):
+    plt.plot(
+        metrics[i, :, 0],
+        metrics[i, :, 1],
+        marker="o",
+        markersize=3,
+        label=f"L={L}"
+    )
+    
+plt.xlabel("BFDR")
+plt.ylabel("BFNR")
+plt.legend()
+plt.show()
 
-with open(outfile, "wb") as f:
-    with cctx.stream_writer(f) as zf:
-        pickle.dump(output, zf, protocol=pickle.HIGHEST_PROTOCOL)
