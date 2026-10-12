@@ -15,15 +15,8 @@ import pandas as pd
 import numpy as np
 import sys
 
-sys.modules["numpy._core"] = np.core
-sys.modules["numpy._core.multiarray"] = np.core.multiarray
-sys.modules["numpy._core.numeric"] = np.core.numeric
-
-# import matplotlib.pyplot as plt
-# import seaborn as sns
-
 # Folder containing the .zst files
-results_dir = Path("results/temp/experiment_overlap")
+results_dir = Path("results_07/")
 
 dctx = zstd.ZstdDecompressor()
 

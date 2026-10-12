@@ -274,7 +274,7 @@ output = {
     "samples": samples,
     "results": min_per_class,
 }
-outfile = (
+outfile = (f'results_07/'
     f"results_job{job_id:06d}"
     f"_p{p}"
     f"_a{active_p:.2f}"
