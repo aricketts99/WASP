@@ -18,6 +18,7 @@ import sys
 from src.bvs import BVS_MCMC
 from src.wass_approx_gen_ham import wass_approx
 from src.utils.utils import _make_beta, _scale_beta, basic, block_corr, decoy, AR_1, basic_error, t_error, laplace_error, gen_Y
+from scipy.stats import wasserstein_distance_nd
 
 # ------------------------------------------------------------
 # Settings
@@ -28,7 +29,7 @@ n = 1000
 params = pd.read_csv("parameters_mixture_contam.csv")
 K = 2
 
-job_id = int(sys.argv[1])
+job_id = 1#int(sys.argv[1])
 row = params.iloc[job_id - 1]
 
 seed = int(row.seed)
@@ -247,11 +248,13 @@ for l in Ls:
     weighted_R2_test = (weights * R2_test).sum()
     
     
+    
+    wass_beta = wasserstein_distance_nd(beta,OLS_array,pi,weights)
         
     
 
     min_per_class[l] = min_per_class[l] + (
-        weighted_sum_over_K,weighted_sum_over_L,weighted_R2,weighted_R2_test,
+        weighted_sum_over_K,weighted_sum_over_L,weighted_R2,weighted_R2_test,wass_beta
     )
 
 output = {
