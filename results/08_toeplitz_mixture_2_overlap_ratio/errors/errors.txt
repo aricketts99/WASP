@@ -1,0 +1,1 @@
+This is where EDDIE will stores its error files.
