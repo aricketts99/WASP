@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 src/__init__.py
 src/test_dgp_utils.py
+src/wass_approx_dss.py
 src/wass_approx_gen_ham.py
 src/bvs/__init__.py
 src/bvs/g_prior.py

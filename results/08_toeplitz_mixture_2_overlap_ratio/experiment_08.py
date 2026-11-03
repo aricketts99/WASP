@@ -29,7 +29,7 @@ n = 1000
 params = pd.read_csv("parameters_mixture_ratios.csv")
 K = 2
 
-job_id = int(sys.argv[1])
+job_id = 1#int(sys.argv[1])
 row = params.iloc[job_id - 1]
 
 # seed = int(row.seed)
